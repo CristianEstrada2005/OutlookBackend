@@ -1,4 +1,20 @@
+# Angular
+node_modules/
+dist/
+.tmp/
+out-tsc/
+.angular/
+.cache/
+coverage/
+.DS_Store
 
+# Environment files
+*.env
 
-#Ignore vscode AI rules
-.github\instructions\codacy.instructions.md
+# IDEs
+.vscode/
+.idea/
+*.iml
+
+# System files
+Thumbs.db
