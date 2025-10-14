@@ -1,4 +1,3 @@
-// server.js (versión Web App lista para Render)
 import express from "express";
 import dotenv from "dotenv";
 import cors from "cors";
@@ -9,15 +8,13 @@ import axios from "axios";
 import path from "path";
 import fs from "fs";
 import multer from "multer";
-import XLSX from "xlsx";
-import { parse } from "json2csv";
 import * as msal from "@azure/msal-node";
 
 dotenv.config();
 const app = express();
 const port = process.env.PORT || 5000;
 
-// 🧠 PostgreSQL session store
+// PostgreSQL session store
 const PgSession = connectPgSimple(session);
 const pgPool = new pg.Pool({
   host: process.env.PG_HOST,
@@ -27,15 +24,15 @@ const pgPool = new pg.Pool({
   database: process.env.PG_DATABASE,
 });
 
-// 🛡️ Middleware
+// Middleware
 app.use(cors({
-  origin: process.env.FRONTEND_URL || "http://localhost:3000",
+  origin: process.env.FRONTEND_URL,
   credentials: true,
 }));
 app.use(express.json());
 app.use(session({
   store: new PgSession({ pool: pgPool, tableName: "user_sessions" }),
-  secret: process.env.SESSION_SECRET || "super-secret",
+  secret: process.env.SESSION_SECRET,
   resave: false,
   saveUninitialized: false,
   cookie: {
@@ -45,53 +42,44 @@ app.use(session({
   },
 }));
 
-// ✅ Crear carpetas si no existen
+// Crear carpetas si no existen
 const uploadDir = path.join(process.cwd(), "uploads");
 if (!fs.existsSync(uploadDir)) fs.mkdirSync(uploadDir);
 const exportDir = path.join(process.cwd(), "exports");
 if (!fs.existsSync(exportDir)) fs.mkdirSync(exportDir);
 
-// 📁 Configurar multer
+// Multer
 const storage = multer.diskStorage({
   destination: (req, file, cb) => cb(null, "./uploads"),
   filename: (req, file, cb) => cb(null, Date.now() + "-" + file.originalname)
 });
 const upload = multer({ storage });
 
-// 🔐 Configuración MSAL (Confidential Client)
-const msalConfig = {
+// MSAL
+const cca = new msal.ConfidentialClientApplication({
   auth: {
     clientId: process.env.CLIENT_ID,
     authority: `https://login.microsoftonline.com/${process.env.TENANT_ID}`,
     clientSecret: process.env.CLIENT_SECRET,
-  },
-};
-const cca = new msal.ConfidentialClientApplication(msalConfig);
+  }
+});
 
-// Scopes
-const SCOPES = (process.env.SCOPES || "https://graph.microsoft.com/.default offline_access").split(" ");
+const SCOPES = process.env.SCOPES.split(" ");
 const REDIRECT_URI = process.env.REDIRECT_URI;
-const FRONTEND_URL = process.env.FRONTEND_URL || "http://localhost:3000/";
+const FRONTEND_URL = process.env.FRONTEND_URL;
 
-// -----------------------------
-// 🔹 LOGIN MICROSOFT
-// -----------------------------
+// LOGIN
 app.get("/auth/login", async (req, res) => {
   try {
-    const authUrl = await cca.getAuthCodeUrl({
-      scopes: SCOPES,
-      redirectUri: REDIRECT_URI,
-    });
+    const authUrl = await cca.getAuthCodeUrl({ scopes: SCOPES, redirectUri: REDIRECT_URI });
     res.redirect(authUrl);
   } catch (err) {
-    console.error("❌ Error en /auth/login:", err.message);
+    console.error("Error /auth/login:", err.message);
     res.status(500).send("Error iniciando autenticación");
   }
 });
 
-// -----------------------------
-// 🔹 CALLBACK MICROSOFT
-// -----------------------------
+// CALLBACK
 app.get("/auth/callback", async (req, res) => {
   const code = req.query.code;
   if (!code) return res.status(400).send("Falta el código de autorización");
@@ -103,52 +91,42 @@ app.get("/auth/callback", async (req, res) => {
       redirectUri: REDIRECT_URI,
     });
 
-    const { accessToken, account } = tokenResponse;
-    req.session.accessToken = accessToken;
+    console.log("Token response:", tokenResponse);
 
-    // Obtener datos del usuario desde Microsoft Graph
+    req.session.accessToken = tokenResponse.accessToken;
+
     const meResp = await axios.get("https://graph.microsoft.com/v1.0/me", {
-      headers: { Authorization: `Bearer ${accessToken}` },
+      headers: { Authorization: `Bearer ${tokenResponse.accessToken}` },
     });
 
-    const graphUser = meResp.data;
-    const microsoftId = graphUser.id;
-    const nombre = graphUser.displayName || null;
-    const email = graphUser.mail || graphUser.userPrincipalName || null;
+    const { id: microsoftId, displayName: nombre, mail, userPrincipalName } = meResp.data;
+    const email = mail || userPrincipalName || null;
 
-    // Upsert del usuario en BD
-    const upsertQuery = `
+    const result = await pgPool.query(`
       INSERT INTO public.usuario (nombre, email, microsoft_id)
       VALUES ($1, $2, $3)
       ON CONFLICT (microsoft_id)
       DO UPDATE SET nombre = EXCLUDED.nombre, email = EXCLUDED.email
       RETURNING id, nombre, email, microsoft_id;
-    `;
-    const result = await pgPool.query(upsertQuery, [nombre, email, microsoftId]);
-    const usuarioRow = result.rows[0];
+    `, [nombre, email, microsoftId]);
 
-    req.session.user = {
-      id: usuarioRow.id,
-      nombre: usuarioRow.nombre,
-      email: usuarioRow.email,
-      microsoftId: usuarioRow.microsoft_id,
-    };
+    req.session.user = result.rows[0];
 
-    // Actualizar usuario_id en sesión
     await pgPool.query(`
       UPDATE public.user_sessions SET usuario_id = $1 WHERE sid = $2
-    `, [usuarioRow.id, req.sessionID]);
+    `, [req.session.user.id, req.sessionID]);
 
-    res.redirect(`${FRONTEND_URL}permissions`);
+    // REDIRECT seguro
+    if (FRONTEND_URL) res.redirect(`${FRONTEND_URL}permissions`);
+    else res.send("Login completado. Puedes cerrar esta ventana.");
+
   } catch (err) {
-    console.error("❌ Error en /auth/callback:", err.response?.data || err.message);
+    console.error("Error /auth/callback:", err.response?.data || err.message);
     res.status(500).send("Error durante la autenticación");
   }
 });
 
-// -----------------------------
-// 🔹 /me
-// -----------------------------
+// ME
 app.get("/me", async (req, res) => {
   if (!req.session.accessToken) return res.status(401).send("No autenticado");
   try {
@@ -157,85 +135,23 @@ app.get("/me", async (req, res) => {
     });
     res.json({ graph: response.data, localUser: req.session.user || null });
   } catch (err) {
-    console.error("❌ Error en /me:", err.message);
+    console.error("Error /me:", err.message);
     res.status(500).send("Error al obtener usuario");
   }
 });
 
-// -----------------------------
-// 🔹 CONTACTOS POR CATEGORÍA
-// -----------------------------
-app.get("/contacts-by-category", async (req, res) => {
-  if (!req.session.accessToken) return res.status(401).send("No autenticado");
-
-  try {
-    let allContacts = [];
-    let nextLink = "https://graph.microsoft.com/v1.0/me/contacts?$top=100";
-
-    while (nextLink) {
-      const resp = await axios.get(nextLink, {
-        headers: { Authorization: `Bearer ${req.session.accessToken}` },
-      });
-      const data = resp.data;
-      allContacts = allContacts.concat(data.value || []);
-      nextLink = data["@odata.nextLink"] || null;
-    }
-
-    const grouped = {};
-    allContacts.forEach((contact) => {
-      const categories = contact.categories?.length ? contact.categories : ["Sin categoría"];
-      categories.forEach((cat) => {
-        if (!grouped[cat]) grouped[cat] = [];
-        grouped[cat].push({
-          nombre: contact.displayName || "Sin nombre",
-          correo: contact.emailAddresses?.[0]?.address || "Sin correo",
-        });
-      });
-    });
-
-    res.json(grouped);
-  } catch (err) {
-    console.error("❌ Error en /contacts-by-category:", err.message);
-    res.status(500).send("Error al obtener contactos");
-  }
-});
-
-// -----------------------------
-// 🔹 ENDPOINTS ARCHIVOS / EXPORTACIONES / MERGE
-// -----------------------------
-/* Mantengo íntegramente tus endpoints aquí (idénticos al archivo original),
-   ya que no requieren cambios en la lógica de autenticación ni BD.
-   Solo asegúrate de que /uploads y /exports existan (ya lo hacemos arriba). 
-*/
-
-// ⚙️ Reusa todo el código de archivos, exportaciones y merge que ya tenías
-// (no lo repito aquí por longitud, pero es exactamente igual y compatible)
-
-// -----------------------------
-// 🔹 SESIÓN / LOGOUT
-// -----------------------------
-app.get("/session-check", (req, res) => {
-  res.json({ token: req.session.accessToken || null, localUser: req.session.user || null });
-});
-
+// LOGOUT
 app.post("/logout", (req, res) => {
   if (req.session) {
-    req.session.destroy((err) => {
-      if (err) {
-        console.error("❌ Error al cerrar sesión:", err);
-        return res.status(500).send("Error al cerrar sesión.");
-      }
+    req.session.destroy(err => {
+      if (err) return res.status(500).send("Error al cerrar sesión");
       res.clearCookie("connect.sid");
-      res.status(200).send("Sesión cerrada correctamente.");
+      res.send("Sesión cerrada correctamente");
     });
-  } else {
-    res.status(200).send("No hay sesión activa.");
-  }
+  } else res.send("No hay sesión activa");
 });
 
-// ✅ Servir carpeta /exports
+// Servir /exports
 app.use("/exports", express.static(exportDir));
 
-app.listen(port, () => {
-  console.log(`🚀 Servidor corriendo en puerto ${port}`);
-});
+app.listen(port, () => console.log(`Servidor corriendo en puerto ${port}`));
