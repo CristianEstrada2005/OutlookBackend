@@ -126,43 +126,26 @@ app.get("/auth/callback", async (req, res) => {
       headers: { Authorization: `Bearer ${access_token}` },
     });
     const graphUser = meResp.data;
-    const microsoftId = graphUser.id;
-    const nombre = graphUser.displayName || null;
-    const email = graphUser.mail || graphUser.userPrincipalName || null;
 
-    // Upsert en tabla usuario
-    const upsertQuery = `
-      INSERT INTO public.usuario (nombre, email, microsoft_id)
-      VALUES ($1, $2, $3)
-      ON CONFLICT (microsoft_id)
-      DO UPDATE SET nombre = EXCLUDED.nombre, email = EXCLUDED.email
-      RETURNING id, nombre, email, microsoft_id;
-    `;
-    const result = await pgPool.query(upsertQuery, [nombre, email, microsoftId]);
-    const usuarioRow = result.rows[0];
-
+    // Guardar usuario en sesión
     req.session.user = {
-      id: usuarioRow.id,
-      nombre: usuarioRow.nombre,
-      email: usuarioRow.email,
-      microsoftId: usuarioRow.microsoft_id,
+      id: graphUser.id,
+      nombre: graphUser.displayName,
+      email: graphUser.mail || graphUser.userPrincipalName,
     };
 
-    // Actualizar usuario_id en user_sessions
-    try {
-      await pgPool.query(`
-        UPDATE public.user_sessions SET usuario_id = $1 WHERE sid = $2
-      `, [usuarioRow.id, req.sessionID]);
-    } catch (err) {
-      console.error("⚠️ Error al actualizar usuario_id:", err.message);
-    }
+    // ✅ En vez de redirigir al frontend, mostramos los datos
+    res.json({
+      mensaje: "Login exitoso en Microsoft",
+      graphUser,
+    });
 
-    res.redirect("http://localhost:3000/permissions");
   } catch (err) {
     console.error("❌ Error en /auth/callback:", err.response?.data || err.message);
     res.status(500).send("Error al iniciar sesión");
   }
 });
+
 
 // -----------------------------
 // Endpoint /me
