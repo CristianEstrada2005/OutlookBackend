@@ -35,7 +35,7 @@ app.use(cors({
 app.use(express.json());
 app.use(session({
   store: new PgSession({ pool: pgPool, tableName: "user_sessions" }),
-  secret: process.env.SESION_SECRET || "super-secret",
+  secret: process.env.SESSION_SECRET || "super-secret",
   resave: false,
   saveUninitialized: false,
   cookie: {
