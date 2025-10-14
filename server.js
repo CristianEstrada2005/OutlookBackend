@@ -69,7 +69,7 @@ const msalConfig = {
 const cca = new msal.ConfidentialClientApplication(msalConfig);
 
 // Scopes
-const SCOPES = (process.env.SCOPES || "User.Read Mail.Read Mail.ReadWrite").split(" ");
+const SCOPES = (process.env.SCOPES || "https://graph.microsoft.com/.default offline_access").split(" ");
 const REDIRECT_URI = process.env.REDIRECT_URI;
 const FRONTEND_URL = process.env.FRONTEND_URL || "http://localhost:3000/";
 
