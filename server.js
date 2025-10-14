@@ -54,7 +54,8 @@ const upload = multer({ storage });
 // 🔐 Configuración OAuth
 const CLIENT_ID = process.env.CLIENT_ID;
 const REDIRECT_URI = process.env.REDIRECT_URI;
-const AUTHORITY = process.env.FRONTEND_URL;
+const AUTHORITY = "https://login.microsoftonline.com/common"; // Microsoft
+
 const SCOPES = [
   "openid",
   "profile",
@@ -92,6 +93,7 @@ app.get("/auth/login", async (req, res) => {
     code_challenge_method: "S256",
   };
   const authorizeUrl = `${AUTHORITY}/oauth2/v2.0/authorize?${querystring.stringify(params)}`;
+
   res.redirect(authorizeUrl);
 });
 
