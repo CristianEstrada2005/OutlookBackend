@@ -68,7 +68,7 @@ const upload = multer({ storage });
 
 // 🔐 Configuración OAuth
 const CLIENT_ID = process.env.CLIENT_ID;
-const REDIRECT_URI = "http://localhost:5000/auth/callback";
+const REDIRECT_URI = "https://outlookbackend.onrender.com/auth/callback";
 const AUTHORITY = "https://login.microsoftonline.com/common";
 const SCOPES = [
   "openid",
