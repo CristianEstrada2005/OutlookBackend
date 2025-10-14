@@ -11,7 +11,7 @@ import fs from "fs";
 import multer from "multer";
 import XLSX from "xlsx";
 import { parse } from "json2csv";
-import msal from "@azure/msal-node";
+import * as msal from "@azure/msal-node";
 
 dotenv.config();
 const app = express();
