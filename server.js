@@ -1,4 +1,4 @@
-// server.js (versión final Render con PKCE seguro)
+// server.js - Render optimizado con PKCE y sesiones
 import express from "express";
 import dotenv from "dotenv";
 import cors from "cors";
@@ -24,70 +24,58 @@ app.use(
   })
 );
 
-// -------------------- BASE DE DATOS (PostgreSQL) --------------------
+// -------------------- BASE DE DATOS --------------------
 const { Pool } = pg;
 const pgSession = connectPgSimple(session);
 
 const pool = new Pool({
-  connectionString: `postgresql://${process.env.PG_USER}:${process.env.PG_PASSWORD}@${process.env.PG_HOST}/${process.env.PG_DATABASE}?sslmode=${process.env.PGSSLMODE}`,
+  connectionString: process.env.DATABASE_URL, // Render te da DATABASE_URL
   ssl: { rejectUnauthorized: false },
 });
 
 // -------------------- SESIONES --------------------
-// -------------------- SESIONES --------------------
-app.set("trust proxy", 1); // 🔥 MUY IMPORTANTE en Render
+app.set("trust proxy", 1); // necesario en Render
 
 app.use(
   session({
     store: new pgSession({ pool }),
-    secret: process.env.SESSION_SECRET,
+    secret: process.env.SESSION_SECRET || "supersecret",
     resave: false,
     saveUninitialized: false,
     cookie: {
-      secure: true,         // Render usa HTTPS, así que debe ser true
-      sameSite: "none",     // Permitir cookies cross-domain
-      httpOnly: true,       // Seguridad extra
-      maxAge: 24 * 60 * 60 * 1000,
+      secure: true,        // Render usa HTTPS
+      sameSite: "none",    // necesario para cross-domain
+      httpOnly: true,
+      maxAge: 24 * 60 * 60 * 1000, // 1 día
     },
   })
 );
 
-
 // -------------------- VARIABLES DE ENTORNO --------------------
 const CLIENT_ID = process.env.CLIENT_ID;
 const CLIENT_SECRET = process.env.CLIENT_SECRET;
-const TENANT_ID = process.env.TENANT_ID || "common"; // aceptar cualquier cuenta
+const TENANT_ID = process.env.TENANT_ID || "common";
 const REDIRECT_URI =
-  process.env.REDIRECT_URI ||
-  "https://outlookbackend.onrender.com/auth/callback";
+  process.env.REDIRECT_URI || "https://outlookbackend.onrender.com/auth/callback";
 const SCOPES =
-  process.env.SCOPES ||
-  "User.Read Mail.Read Mail.ReadWrite offline_access";
-const FRONTEND_URL =
-  process.env.FRONTEND_URL || "https://tufrontend.onrender.com";
+  process.env.SCOPES || "User.Read Mail.Read Mail.ReadWrite offline_access";
+const FRONTEND_URL = process.env.FRONTEND_URL || "https://tufrontend.onrender.com";
 
-// -------------------- RUTAS PRINCIPALES --------------------
-app.get("/", (req, res) => {
-  res.send("Servidor funcionando en Render 🚀");
-});
+// -------------------- RUTAS --------------------
+app.get("/", (req, res) => res.send("Servidor funcionando en Render 🚀"));
 
 // -------------------- LOGIN (PKCE + state) --------------------
 app.get("/auth/login", (req, res) => {
   const state = crypto.randomBytes(16).toString("hex");
   const codeVerifier = crypto.randomBytes(64).toString("hex");
 
-  // PKCE: crear code_challenge con SHA256
-  const base64URLEncode = (str) =>
-    str.replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
-  const sha256 = (buffer) =>
-    crypto.createHash("sha256").update(buffer).digest("base64");
+  // PKCE: code_challenge
+  const base64URLEncode = (str) => str.replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
+  const sha256 = (buffer) => crypto.createHash("sha256").update(buffer).digest("base64");
   const codeChallenge = base64URLEncode(sha256(codeVerifier));
 
-  // Guardar valores en la sesión
   req.session.codeVerifier = codeVerifier;
   req.session.state = state;
-
-  console.log("🧩 Estado generado:", state);
 
   const params = querystring.stringify({
     client_id: CLIENT_ID,
@@ -100,22 +88,16 @@ app.get("/auth/login", (req, res) => {
     code_challenge_method: "S256",
   });
 
-  const authUrl = `https://login.microsoftonline.com/${TENANT_ID}/oauth2/v2.0/authorize?${params}`;
-  res.redirect(authUrl);
+  res.redirect(`https://login.microsoftonline.com/${TENANT_ID}/oauth2/v2.0/authorize?${params}`);
 });
 
 // -------------------- CALLBACK --------------------
 app.get("/auth/callback", async (req, res) => {
   const { code, state } = req.query;
-  console.log("🔄 Estado recibido:", state, "| Estado guardado:", req.session.state);
 
-  if (!code || !state) {
-    return res.status(400).send("Falta el código o el estado en la respuesta.");
-  }
+  if (!code || !state) return res.status(400).send("Falta código o estado.");
 
-  if (state !== req.session.state) {
-    return res.status(400).send("El estado no coincide, posible ataque CSRF.");
-  }
+  if (state !== req.session.state) return res.status(400).send("Estado no coincide.");
 
   try {
     const tokenResponse = await axios.post(
@@ -126,7 +108,7 @@ app.get("/auth/callback", async (req, res) => {
         code,
         redirect_uri: REDIRECT_URI,
         grant_type: "authorization_code",
-        code_verifier: req.session.codeVerifier, // PKCE real
+        code_verifier: req.session.codeVerifier,
         client_secret: CLIENT_SECRET,
       }),
       { headers: { "Content-Type": "application/x-www-form-urlencoded" } }
@@ -137,44 +119,35 @@ app.get("/auth/callback", async (req, res) => {
     req.session.accessToken = access_token;
     req.session.idToken = id_token;
     req.session.refreshToken = refresh_token;
+    req.session.user = jwt.decode(id_token);
 
-    const user = jwt.decode(id_token);
-    req.session.user = user;
-
-    console.log("✅ Usuario autenticado:", user?.name || "sin nombre");
     res.redirect(`${FRONTEND_URL}?login=success`);
   } catch (err) {
-    console.error("❌ Error en el callback:", err.response?.data || err.message);
+    console.error("Error callback:", err.response?.data || err.message);
     res.status(500).send("Error en la autenticación con Microsoft.");
   }
 });
 
-// -------------------- CERRAR SESIÓN --------------------
+// -------------------- LOGOUT --------------------
 app.get("/auth/logout", (req, res) => {
-  req.session.destroy(() => {
-    res.redirect(FRONTEND_URL);
-  });
+  req.session.destroy(() => res.redirect(FRONTEND_URL));
 });
 
-// -------------------- RUTA DE PRUEBA TOKEN --------------------
+// -------------------- RUTA PRUEBA --------------------
 app.get("/me", async (req, res) => {
-  if (!req.session.accessToken) {
-    return res.status(401).json({ error: "No autenticado" });
-  }
+  if (!req.session.accessToken) return res.status(401).json({ error: "No autenticado" });
 
   try {
     const response = await axios.get("https://graph.microsoft.com/v1.0/me", {
       headers: { Authorization: `Bearer ${req.session.accessToken}` },
     });
     res.json(response.data);
-  } catch (error) {
-    console.error("Error obteniendo datos del usuario:", error.message);
+  } catch (err) {
+    console.error("Error obteniendo usuario:", err.message);
     res.status(500).send("Error al obtener datos del usuario.");
   }
 });
 
-// -------------------- ARRANQUE DEL SERVIDOR --------------------
+// -------------------- INICIO --------------------
 const PORT = process.env.PORT || 3000;
-app.listen(PORT, () => {
-  console.log(`🚀 Servidor corriendo en Render puerto ${PORT}`);
-});
+app.listen(PORT, () => console.log(`🚀 Servidor corriendo en Render puerto ${PORT}`));
