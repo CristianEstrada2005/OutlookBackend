@@ -18,3 +18,7 @@ coverage/
 
 # System files
 Thumbs.db
+
+# Ignorar carpetas de exportación y subida
+/exports/
+/uploads/

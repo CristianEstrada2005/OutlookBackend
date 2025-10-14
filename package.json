@@ -19,6 +19,11 @@
     "dotenv": "^16.4.5",
     "express": "^5.1.0",
     "express-session": "^1.18.2",
-    "pg": "^8.16.3"
+    "fs": "^0.0.1-security",
+    "json2csv": "^6.0.0-alpha.2",
+    "multer": "^2.0.2",
+    "path": "^0.12.7",
+    "pg": "^8.16.3",
+    "xlsx": "^0.18.5"
   }
 }
