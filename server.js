@@ -19,7 +19,7 @@ app.use(express.urlencoded({ extended: true }));
 // -------------------- CORS --------------------
 app.use(
   cors({
-    origin: process.env.FRONTEND_URL || "https://tufrontend.onrender.com",
+    origin: process.env.FRONTEND_URL,
     credentials: true,
   })
 );
