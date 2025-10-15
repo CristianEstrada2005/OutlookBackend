@@ -1,4 +1,4 @@
-// server.js (versión Web App lista para Render)
+cors// server.js (versión Web App lista para Render)
 import express from "express";
 import dotenv from "dotenv";
 import cors from "cors";
@@ -27,23 +27,25 @@ const pgPool = new pg.Pool({
   database: process.env.PG_DATABASE,
 });
 
-// 🛡️ Middleware
 app.use(cors({
-  origin: process.env.FRONTEND_URL || "http://localhost:3000",
+  origin: process.env.FRONTEND_URL,
   credentials: true,
+  methods: ["GET", "POST", "OPTIONS"],
+  allowedHeaders: ["Content-Type", "Authorization"],
 }));
-app.use(express.json());
+
 app.use(session({
   store: new PgSession({ pool: pgPool, tableName: "user_sessions" }),
-  secret: process.env.SESION_SECRET || "super-secret",
+  secret: process.env.SESSION_SECRET || "super-secret",
   resave: false,
   saveUninitialized: false,
   cookie: {
-    maxAge: 1000 * 60 * 60 * 2, // 2 horas
-    secure: process.env.NODE_ENV === "production",
-    sameSite: "lax",
+    maxAge: 1000 * 60 * 60 * 2,
+    secure: true,       // 👈 Render usa HTTPS
+    sameSite: "none",   // 👈 permite compartir cookie entre frontend y backend
   },
 }));
+
 
 // ✅ Crear carpetas si no existen
 const uploadDir = path.join(process.cwd(), "uploads");
