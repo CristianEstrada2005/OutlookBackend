@@ -27,22 +27,26 @@ const pgPool = new pg.Pool({
   database: process.env.PG_DATABASE,
 });
 
+// 🛡️ Middleware listo para Render (mantiene sesiones entre frontend y backend)
 app.use(cors({
-  origin: process.env.FRONTEND_URL,
-  credentials: true,
-  methods: ["GET", "POST", "OPTIONS"],
-  allowedHeaders: ["Content-Type", "Authorization"],
+  origin: process.env.FRONTEND_URL || "https://outlookfrontend.onrender.com/", // 🌐 tu dominio de front en Render
+  credentials: true, // ✅ permite enviar cookies y credenciales
 }));
 
+app.use(express.json());
+
 app.use(session({
-  store: new PgSession({ pool: pgPool, tableName: "user_sessions" }),
-  secret: process.env.SESSION_SECRET || "super-secret",
+  store: new PgSession({
+    pool: pgPool,
+    tableName: "user_sessions", // 🔄 tu tabla actual de sesiones
+  }),
+  secret: process.env.SESION_SECRET  || "super-secret", // 🔐 usa un valor fuerte en Render
   resave: false,
   saveUninitialized: false,
   cookie: {
-    maxAge: 1000 * 60 * 60 * 2,
-    secure: true,       // 👈 Render usa HTTPS
-    sameSite: "none",   // 👈 permite compartir cookie entre frontend y backend
+    maxAge: 1000 * 60 * 60 * 2, // 2 horas
+    secure: true,               // ⚠️ obligatorio con HTTPS (Render usa HTTPS)
+    sameSite: "none",           // 🔥 permite compartir cookie entre dominios
   },
 }));
 
