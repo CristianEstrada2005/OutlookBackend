@@ -159,6 +159,9 @@ app.get("/auth/callback", async (req, res) => {
 // 🔹 /me
 // -----------------------------
 app.get("/me", async (req, res) => {
+  console.log("🧪 req.session:", req.session);
+  console.log("🧪 req.sessionID:", req.sessionID);
+
   if (!req.session.accessToken) return res.status(401).send("No autenticado");
   try {
     const response = await axios.get("https://graph.microsoft.com/v1.0/me", {
