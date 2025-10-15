@@ -1,4 +1,3 @@
-cors// server.js (versión Web App lista para Render)
 import express from "express";
 import dotenv from "dotenv";
 import cors from "cors";
@@ -27,31 +26,31 @@ const pgPool = new pg.Pool({
   database: process.env.PG_DATABASE,
 });
 
-// 🛡️ Middleware listo para Render (mantiene sesiones entre frontend y backend)
+// 🛡️ CORS para Render
 app.use(cors({
   origin: process.env.FRONTEND_URL || "https://outlookfrontend.onrender.com",
   credentials: true,
 }));
 
-
 app.use(express.json());
+
+// 🔐 Sesión segura para Render
+app.set("trust proxy", 1); // ✅ necesario para cookies seguras en HTTPS
 
 app.use(session({
   store: new PgSession({
     pool: pgPool,
-    tableName: "user_sessions", // 🔄 tu tabla actual de sesiones
+    tableName: "user_sessions",
   }),
-  secret: process.env.SESION_SECRET || "super-secret", // 🔐 usa un valor fuerte en Render
+  secret: process.env.SESION_SECRET || "super-secret",
   resave: false,
   saveUninitialized: false,
   cookie: {
-    maxAge: 1000 * 60 * 60 * 2, // 2 horas
-    secure: true,               // ✅ obligatorio en Render (HTTPS)
+    maxAge: 1000 * 60 * 60 * 2,
+    secure: true,               // ✅ Render usa HTTPS
     sameSite: "none",           // ✅ permite compartir entre dominios
-  }
-
+  },
 }));
-
 
 // ✅ Crear carpetas si no existen
 const uploadDir = path.join(process.cwd(), "uploads");
@@ -66,7 +65,7 @@ const storage = multer.diskStorage({
 });
 const upload = multer({ storage });
 
-// 🔐 Configuración MSAL (Confidential Client)
+// 🔐 Configuración MSAL
 const msalConfig = {
   auth: {
     clientId: process.env.CLIENT_ID,
@@ -76,10 +75,9 @@ const msalConfig = {
 };
 const cca = new msal.ConfidentialClientApplication(msalConfig);
 
-// Scopes
 const SCOPES = (process.env.SCOPES || "User.Read Mail.Read Mail.ReadWrite").split(" ");
 const REDIRECT_URI = process.env.REDIRECT_URI || "https://outlookbackend.onrender.com/auth/callback";
-const FRONTEND_URL = process.env.FRONTEND_URL || "http://localhost:3000/";
+const FRONTEND_URL = process.env.FRONTEND_URL || "https://outlookfrontend.onrender.com";
 
 // -----------------------------
 // 🔹 LOGIN MICROSOFT
@@ -114,7 +112,6 @@ app.get("/auth/callback", async (req, res) => {
     const { accessToken, account } = tokenResponse;
     req.session.accessToken = accessToken;
 
-    // Obtener datos del usuario desde Microsoft Graph
     const meResp = await axios.get("https://graph.microsoft.com/v1.0/me", {
       headers: { Authorization: `Bearer ${accessToken}` },
     });
@@ -124,7 +121,6 @@ app.get("/auth/callback", async (req, res) => {
     const nombre = graphUser.displayName || null;
     const email = graphUser.mail || graphUser.userPrincipalName || null;
 
-    // Upsert del usuario en BD
     const upsertQuery = `
       INSERT INTO public.usuario (nombre, email, microsoft_id)
       VALUES ($1, $2, $3)
@@ -142,12 +138,17 @@ app.get("/auth/callback", async (req, res) => {
       microsoftId: usuarioRow.microsoft_id,
     };
 
-    // Actualizar usuario_id en sesión
     await pgPool.query(`
       UPDATE public.user_sessions SET usuario_id = $1 WHERE sid = $2
     `, [usuarioRow.id, req.sessionID]);
 
-    res.redirect(`${FRONTEND_URL}/permissions`);
+    req.session.save((err) => {
+      if (err) {
+        console.error("❌ Error guardando sesión:", err);
+        return res.status(500).send("Error guardando sesión");
+      }
+      res.redirect(`${FRONTEND_URL}/permissions`);
+    });
   } catch (err) {
     console.error("❌ Error en /auth/callback:", err.response?.data || err.message);
     res.status(500).send("Error durante la autenticación");
@@ -207,17 +208,6 @@ app.get("/contacts-by-category", async (req, res) => {
     res.status(500).send("Error al obtener contactos");
   }
 });
-
-// -----------------------------
-// 🔹 ENDPOINTS ARCHIVOS / EXPORTACIONES / MERGE
-// -----------------------------
-/* Mantengo íntegramente tus endpoints aquí (idénticos al archivo original),
-   ya que no requieren cambios en la lógica de autenticación ni BD.
-   Solo asegúrate de que /uploads y /exports existan (ya lo hacemos arriba). 
-*/
-
-// ⚙️ Reusa todo el código de archivos, exportaciones y merge que ya tenías
-// (no lo repito aquí por longitud, pero es exactamente igual y compatible)
 
 // -----------------------------
 // 🔹 SESIÓN / LOGOUT
