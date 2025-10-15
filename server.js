@@ -40,13 +40,13 @@ app.use(session({
     pool: pgPool,
     tableName: "user_sessions", // 🔄 tu tabla actual de sesiones
   }),
-  secret: process.env.SESION_SECRET  || "super-secret", // 🔐 usa un valor fuerte en Render
+  secret: process.env.SESION_SECRET || "super-secret", // 🔐 usa un valor fuerte en Render
   resave: false,
   saveUninitialized: false,
   cookie: {
-    maxAge: 1000 * 60 * 60 * 2, // 2 horas
-    secure: true,               // ⚠️ obligatorio con HTTPS (Render usa HTTPS)
-    sameSite: "none",           // 🔥 permite compartir cookie entre dominios
+    secure: process.env.NODE_ENV === "production", // solo en producción
+    sameSite: "none",
+    maxAge: 1000 * 60 * 60 * 2,
   },
 }));
 
