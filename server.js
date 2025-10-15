@@ -29,7 +29,7 @@ const pgPool = new pg.Pool({
 
 // 🛡️ Middleware listo para Render (mantiene sesiones entre frontend y backend)
 app.use(cors({
-  origin: process.env.FRONTEND_URL || "https://outlookfrontend.onrender.com/", // 🌐 tu dominio de front en Render
+  origin: process.env.FRONTEND_URL || "https://outlookfrontend.onrender.com", // 🌐 tu dominio de front en Render
   credentials: true, // ✅ permite enviar cookies y credenciales
 }));
 
