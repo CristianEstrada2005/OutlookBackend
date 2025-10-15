@@ -29,9 +29,10 @@ const pgPool = new pg.Pool({
 
 // 🛡️ Middleware listo para Render (mantiene sesiones entre frontend y backend)
 app.use(cors({
-  origin: process.env.FRONTEND_URL || "https://outlookfrontend.onrender.com", // 🌐 tu dominio de front en Render
-  credentials: true, // ✅ permite enviar cookies y credenciales
+  origin: process.env.FRONTEND_URL || "https://outlookfrontend.onrender.com",
+  credentials: true,
 }));
+
 
 app.use(express.json());
 
@@ -44,10 +45,11 @@ app.use(session({
   resave: false,
   saveUninitialized: false,
   cookie: {
-    secure: process.env.NODE_ENV === "production", // solo en producción
-    sameSite: "none",
-    maxAge: 1000 * 60 * 60 * 2,
-  },
+    maxAge: 1000 * 60 * 60 * 2, // 2 horas
+    secure: true,               // ✅ obligatorio en Render (HTTPS)
+    sameSite: "none",           // ✅ permite compartir entre dominios
+  }
+
 }));
 
 
@@ -76,7 +78,7 @@ const cca = new msal.ConfidentialClientApplication(msalConfig);
 
 // Scopes
 const SCOPES = (process.env.SCOPES || "User.Read Mail.Read Mail.ReadWrite").split(" ");
-const REDIRECT_URI = process.env.REDIRECT_URI || "http://localhost:5000/auth/callback";
+const REDIRECT_URI = process.env.REDIRECT_URI || "https://outlookbackend.onrender.com/auth/callback";
 const FRONTEND_URL = process.env.FRONTEND_URL || "http://localhost:3000/";
 
 // -----------------------------
