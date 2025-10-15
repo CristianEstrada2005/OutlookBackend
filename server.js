@@ -145,7 +145,7 @@ app.get("/auth/callback", async (req, res) => {
       UPDATE public.user_sessions SET usuario_id = $1 WHERE sid = $2
     `, [usuarioRow.id, req.sessionID]);
 
-    res.redirect(`${FRONTEND_URL}permissions`);
+    res.redirect(`${FRONTEND_URL}/permissions`);
   } catch (err) {
     console.error("❌ Error en /auth/callback:", err.response?.data || err.message);
     res.status(500).send("Error durante la autenticación");
