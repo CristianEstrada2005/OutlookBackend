@@ -26,10 +26,31 @@ const pgPool = new pg.Pool({
   database: process.env.PG_DATABASE,
 });
 
-// 🛡️ CORS para Render
+// 🛡️ CORS para Render (múltiples orígenes, cookies y preflight)
+const allowedOrigins = (process.env.FRONTEND_URL_LIST || process.env.FRONTEND_URL || "https://outlookfrontend.onrender.com")
+  .split(",")
+  .map((s) => s.trim())
+  .filter(Boolean);
+
 app.use(cors({
-  origin: process.env.FRONTEND_URL || "https://outlookfrontend.onrender.com",
+  origin: (origin, callback) => {
+    if (!origin) return callback(null, true); // requests del mismo origen o herramientas
+    if (allowedOrigins.includes(origin)) return callback(null, true);
+    return callback(new Error("Not allowed by CORS"));
+  },
   credentials: true,
+  optionsSuccessStatus: 204,
+}));
+
+// Preflight explícito
+app.options("*", cors({
+  origin: (origin, callback) => {
+    if (!origin) return callback(null, true);
+    if (allowedOrigins.includes(origin)) return callback(null, true);
+    return callback(new Error("Not allowed by CORS"));
+  },
+  credentials: true,
+  optionsSuccessStatus: 204,
 }));
 
 app.use(express.json());
