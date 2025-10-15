@@ -226,7 +226,7 @@ app.post("/logout", (req, res) => {
         console.error("❌ Error al cerrar sesión:", err);
         return res.status(500).send("Error al cerrar sesión.");
       }
-      res.clearCookie("connect.sid");
+      res.clearCookie("connect.sid", { path: "/", sameSite: "none", secure: true });
       res.status(200).send("Sesión cerrada correctamente.");
     });
   } else {
