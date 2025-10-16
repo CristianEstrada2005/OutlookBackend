@@ -30,17 +30,7 @@ const pgPool = new pg.Pool({
 app.use(cors({
   origin: process.env.FRONTEND_URL || "https://outlookfrontend.onrender.com",
   credentials: true,
-  methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
-  allowedHeaders: ["Content-Type", "Authorization", "Cache-Control"] // <- importante
 }));
-
-// Middleware para manejar OPTIONS (preflight)
-app.options("*", cors({
-  origin: process.env.FRONTEND_URL || "https://outlookfrontend.onrender.com",
-  credentials: true,
-  allowedHeaders: ["Content-Type", "Authorization", "Cache-Control"]
-}));
-
 
 app.use(express.json());
 
